@@ -213,7 +213,7 @@ python -m scripts.second_rater agree goldstandard\manufacturer_b_erpnext.json ^
 
 | Done | Outstanding |
 |---|---|
-| 14 modules, 118 tests | Thresholds (3.2) |
+| 14 modules, 119 tests | Thresholds (3.2) |
 | CDM v1.0, 54 fields, clause provenance | Calibrator (3.3) |
 | 253-key alias vocabulary | Git history (3.1) |
 | Six dev gold standards, 99 columns | Freeze tag (3.4) |

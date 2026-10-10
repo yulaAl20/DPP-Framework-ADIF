@@ -77,15 +77,36 @@ class MiniLMEmbedder:
     """
 
     def __init__(self, model_name: str, cache_dir: str, revision: str | None = None):
+        import inspect
         import os
 
+        # These two are the load-bearing offline guarantee, and they are what
+        # the NFR-1 acceptance test actually exercises: huggingface_hub reads
+        # them at call time and raises rather than reaching the network.
         os.environ.setdefault("HF_HUB_OFFLINE", "1")
         os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
         from sentence_transformers import SentenceTransformer  # lazy: heavy
 
-        self._model = SentenceTransformer(
-            model_name, cache_folder=cache_dir, local_files_only=True
-        )
+        kwargs: dict[str, object] = {"cache_folder": cache_dir}
+
+        # The revision MUST be passed through, not merely recorded. Keeping it
+        # only in ``self.name`` and in the run record made the pin decorative:
+        # the loader would happily take whatever revision happened to be in the
+        # cache while every run record claimed the pinned one. That is a
+        # reproducibility claim the artefact could not support (NFR-5).
+        if revision:
+            kwargs["revision"] = revision
+
+        # ``local_files_only`` was added to SentenceTransformer.__init__ in
+        # 3.x. Passing it unconditionally raises TypeError on 2.x, which is
+        # inside the range requirements-optional.txt originally allowed. The
+        # signature check keeps the stronger assertion where it exists and
+        # falls back to the environment variables above where it does not,
+        # rather than forcing a multi-gigabyte reinstall to satisfy a keyword.
+        if "local_files_only" in inspect.signature(SentenceTransformer.__init__).parameters:
+            kwargs["local_files_only"] = True
+
+        self._model = SentenceTransformer(model_name, **kwargs)
         self.name = f"{model_name}@{revision or 'unpinned'}"
 
     def encode(self, texts: list[str]) -> list[list[float]]:

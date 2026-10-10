@@ -1,8 +1,8 @@
 # ADIF core dependencies.
 #
-# This file alone runs EVERYTHING currently implemented: all 85 tests, the REST
-# API, the review UI, the CLI and the demo. Install it and nothing else to
-# start.
+# This file alone runs EVERYTHING currently implemented: the whole test suite,
+# the REST API, the review UI, the CLI and the demo. Install it and nothing
+# else to start.
 #
 #     pip install -r requirements.txt
 #

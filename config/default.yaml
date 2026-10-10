@@ -71,16 +71,15 @@ matching:
       partial_min_length_ratio: 0.5
     semantic:                   # M5
       enabled: true
-      threshold: null           # UNSET — grid search (D11)
+      threshold: null           # UNSET - grid search (D11)
       top_k: 5
       model: "sentence-transformers/all-MiniLM-L6-v2"
-      model_revision: null      # pinned at setup; recorded in every run (FR-5.5)
-    value:                      # M6 — Stage 4, invoked only when every
+      model_revision: "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
+    value:                      # M6 - Stage 4, invoked only when every
       enabled: false            # header-based stage returned nothing (FR-6.3).
-      threshold: null           # UNSET — grid search (D11)
+      threshold: null           # UNSET - grid search (D11)
       top_k: 5
       signatures: cdm/vocabularies/signatures.yaml
-
 confidence:                     # M7
   calibration: platt            # D6. Isotonic needs more data than this study has.
   bands:                        # FR-8.4 visual bands / FR-7.4 rejection

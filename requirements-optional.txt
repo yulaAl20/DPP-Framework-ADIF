@@ -10,7 +10,10 @@
 # Then cache the model once (see docs/setup.md step 8) and record its revision
 # hash in config/default.yaml. An unpinned model is an unreproducible result.
 
-sentence-transformers>=2.7,<3   # Stage 3 real embedder (all-MiniLM-L6-v2)
+sentence-transformers>=2.7,<6   # Stage 3 real embedder (all-MiniLM-L6-v2)
+# Range widened 2026-10-08. The previous <3 cap was wrong: MiniLMEmbedder
+# is loaded through a signature check, so it works on 2.x and 3.x alike.
+# Record the version you actually resolved via `pip freeze`, not this range.
 scikit-learn>=1.4,<1.6          # evaluation harness (M14)
 matplotlib>=3.8,<3.10           # reliability diagrams (Metric 3)
 psutil>=5.9,<6                  # runtime/memory instrumentation (FR-14.4)

@@ -77,7 +77,7 @@ INCREMENTS: list[tuple[str, list[str]]] = [
     ("Add acceptance tests for NFR-1 offline, NFR-4 performance, NFR-5 reproducibility",
      ["tests/acceptance/"]),
     ("Add documentation: setup, verification guide, NFR record, licence inventory",
-     ["README.md", "NEXT_STEPS.md", "docs/"]),
+     ["README.md", "NEXT_STEPS.md", "QUICKSTART.md", "RECOVER.md", "PUSH.md", "docs/"]),
 ]
 
 
@@ -107,10 +107,40 @@ def main() -> int:
         print(f"\n{len(INCREMENTS)} commits. Nothing written — drop --dry-run to apply.")
         return 0
 
+    project_root = Path.cwd().resolve()
+
     if subprocess.run(["git", "rev-parse", "--git-dir"],
                       capture_output=True).returncode != 0:
         _git("init")
         print("Initialised repository")
+
+    # `git rev-parse --git-dir` succeeds from inside ANY ancestor repository.
+    # If a parent directory is already a repo — a home folder under version
+    # control is the common case on Windows — the check above passes, no init
+    # happens, and every commit below lands in that unrelated repository with
+    # the project buried under a long path prefix. The catch-all `git add` then
+    # sweeps the whole of it.
+    #
+    # This has actually happened. It is not a hypothetical, and it cost an
+    # afternoon, so the script refuses rather than warns.
+    toplevel = Path(_git("rev-parse", "--show-toplevel")).resolve()
+    if toplevel != project_root:
+        raise SystemExit(
+            f"Refusing to run.\n\n"
+            f"  This directory:   {project_root}\n"
+            f"  Repository root:  {toplevel}\n\n"
+            f"These must be the same. An ancestor directory is already a git\n"
+            f"repository, so the commits would go into that one and would pick\n"
+            f"up every unrelated file under it.\n\n"
+            f"Fix one of these, then re-run:\n"
+            f"  - You meant to run this somewhere else: cd to the project folder.\n"
+            f"  - That ancestor repo is unwanted: remove its .git directory\n"
+            f"    ({toplevel / '.git'}) only if you are certain it is not a real\n"
+            f"    repository with work in it. Check `git -C \"{toplevel}\" log`\n"
+            f"    and `git -C \"{toplevel}\" remote -v` FIRST.\n"
+            f"  - That ancestor repo is real and wanted: this project needs to\n"
+            f"    live outside it, or be added to its .gitignore."
+        )
 
     if args.name:
         _git("config", "user.name", args.name)
@@ -137,7 +167,7 @@ def main() -> int:
     # Anything the increment list did not name — a file added since, or one this
     # script does not know about. Committing it separately keeps the increment
     # commits honest about their contents.
-    _git("add", "-A")
+    _git("add", "-A", "--", ".")
     if _git("diff", "--cached", "--name-only"):
         _git("commit", "-m", "Add remaining project files")
         made += 1

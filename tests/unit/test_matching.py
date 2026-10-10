@@ -201,3 +201,43 @@ def test_real_cdm_maps_a_typo_to_fibre_composition_not_a_short_alias():
     column = analyse_frame(pd.DataFrame({"Fabric_Compostion": ["80% Cotton"]}), BASE).columns[0]
     top = match_fuzzy(column, registry, BASE.matching.stages.fuzzy)[0]
     assert top.cdm_field == "fibreComposition"
+
+
+def test_minilm_embedder_passes_revision_and_survives_old_signatures(monkeypatch) -> None:
+    """Regression: the real embedder crashed on sentence-transformers 2.x.
+
+    Two defects are pinned here. ``local_files_only`` does not exist on
+    SentenceTransformer 2.x, so passing it unconditionally raised TypeError and
+    the grid search could never run. And ``revision`` was accepted by
+    MiniLMEmbedder, written into every run record, and then never handed to the
+    loader — so the reproducibility pin was decorative. Both are asserted
+    against a fake whose signature mimics 2.x.
+    """
+    import sys
+    import types
+
+    from src.matching import stage3_semantic
+
+    captured: dict[str, object] = {}
+
+    class FakeOldSentenceTransformer:
+        # No local_files_only: this is the 2.x signature that broke the run.
+        def __init__(self, model_name_or_path, cache_folder=None, revision=None):
+            captured["model"] = model_name_or_path
+            captured["cache_folder"] = cache_folder
+            captured["revision"] = revision
+
+        def encode(self, texts, normalize_embeddings=True):
+            return [[1.0] + [0.0] * 383 for _ in texts]
+
+    module = types.ModuleType("sentence_transformers")
+    module.SentenceTransformer = FakeOldSentenceTransformer
+    monkeypatch.setitem(sys.modules, "sentence_transformers", module)
+
+    embedder = stage3_semantic.MiniLMEmbedder(
+        "sentence-transformers/all-MiniLM-L6-v2", ".model_cache", revision="deadbeef"
+    )
+
+    assert captured["revision"] == "deadbeef", "the pinned revision must reach the loader"
+    assert captured["cache_folder"] == ".model_cache"
+    assert embedder.name.endswith("@deadbeef")
