@@ -114,9 +114,9 @@ evidence of calibration.
 **Review burden** (share of columns routed to a human, review band 0.9608, D27)
 was 1.00 for the fuzzy-only and alias conditions, 0.98 for `full_cascade` and
 0.93 for `full_cascade_value`. *[interpretation]* The calibrated confidence is
-informative (accuracy rises with confidence), but only value-stage mappings
-cleared the 90%-accuracy review band on the development data, so the system in
-its frozen form still sends almost every column to a person. The value of the
+informative (accuracy rises with confidence), but on the development data
+only the 18 mappings from the value stage (16) and the semantic stage (2) cleared
+the 90%-accuracy review band, so the system in its frozen form still sends almost every column to a person. The value of the
 gateway on this evidence is a ranked, pre-filled proposal, not autonomous
 mapping.
 
