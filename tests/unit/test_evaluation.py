@@ -212,3 +212,33 @@ def test_perturbation_is_reproducible_under_a_seed(tmp_path):
     _run("scripts.perturb_schema", str(source), "--level", "moderate",
          "--seed", "11", "--out", str(tmp_path / "out2"))
     assert produced == (tmp_path / "out2" / "s_moderate.csv").read_text()
+
+
+# --- Review threshold rule -------------------------------------------------
+
+def test_review_threshold_is_lowest_confidence_reaching_target_accuracy():
+    from src.matching.confidence import derive_review_threshold
+
+    pairs = [(0.5, False), (0.6, True), (0.7, False), (0.8, True), (0.9, True), (0.95, True)]
+    found = derive_review_threshold(pairs, 0.90)
+    # >=0.7 -> 3/4 right (0.75); >=0.8 -> 3/3 right.
+    assert found["threshold"] == 0.8
+    assert found["accepted"] == 3 and found["total"] == 6
+    assert found["accuracy"] == 1.0
+
+
+def test_review_threshold_is_none_when_target_is_unreachable():
+    from src.matching.confidence import derive_review_threshold
+
+    assert derive_review_threshold([(0.9, False), (0.95, False)], 0.90) is None
+    assert derive_review_threshold([], 0.90) is None
+
+
+def test_grid_search_smoke_runs_three_thresholds_with_stub(tmp_path):
+    out = tmp_path / "thresholds.yaml"
+    result = _run("eval.grid_search", "--allow-stub", "--start", "80", "--stop", "90",
+                  "--step", "10", "--out", str(out))
+    assert result.returncode == 0, result.stderr
+    import yaml
+    stages = yaml.safe_load(out.read_text())["matching"]["stages"]
+    assert set(stages) == {"fuzzy", "semantic", "value"}
