@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import itertools
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import yaml
@@ -128,10 +129,24 @@ def main() -> int:
 
     best = {"f1": -1.0}
     trace = []
-    for fuzzy, semantic, value in itertools.product(grid, grid, grid):
-        stages.fuzzy.threshold = fuzzy
-        stages.semantic.threshold = semantic
-        stages.value.threshold = value
+
+    # The context — CDM registry, semantic index, signature library — does not
+    # depend on any threshold. Rebuilding it inside the loop reloaded
+    # all-MiniLM-L6-v2 from disk and re-encoded all 54 CDM descriptions on
+    # every one of the 121 iterations, which is the same answer computed 121
+    # times. Built once here and the config swapped per iteration instead;
+    # stage enablement is constant across the grid, which is what makes this
+    # safe.
+    context = build_context(
+        load_overlay(fuzzy_threshold=grid[0], semantic_threshold=grid[0],
+                     value_threshold=grid[0]),
+        real_model=args.real_model,
+    )
+
+    for fuzzy, semantic in itertools.product(grid, grid):
+        cfg = load_overlay(fuzzy_threshold=fuzzy, semantic_threshold=semantic,
+                           value_threshold=fuzzy)
+        context = replace(context, cfg=cfg)
         scores = []
         for schema, gold in pairs:
             result, _ = run_schema(schema, context)

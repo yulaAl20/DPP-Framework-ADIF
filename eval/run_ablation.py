@@ -53,6 +53,15 @@ LADDER = [
     ("full_cascade_value", "config/ablation/full_cascade_value.yaml"),
 ]
 
+# D20 (ratified 2026-10-09): one supplementary condition, run only when named
+# with --conditions, and kept OUT of the delta-F1 sequence. It is not a rung —
+# putting it in the ladder would attribute a gain to a stage that was never
+# "added" to anything.
+SUPPLEMENTARY = [
+    ("semantic_only", "config/ablation/semantic_only.yaml"),
+]
+_LADDER_NAMES = {name for name, _ in LADDER}
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the ablation ladder (D10)")
@@ -72,9 +81,14 @@ def main() -> int:
     args = parser.parse_args()
 
     base = load_config("config/default.yaml")
-    if args.confidence_threshold is None:
-        args.confidence_threshold = base.confidence.bands.review
-    conditions = [c for c in LADDER if not args.conditions or c[0] in args.conditions]
+    if args.conditions:
+        known = {name for name, _ in LADDER + SUPPLEMENTARY}
+        unknown = set(args.conditions) - known
+        if unknown:
+            raise SystemExit(f"Unknown condition(s) {sorted(unknown)}. Known: {sorted(known)}")
+        conditions = [c for c in LADDER + SUPPLEMENTARY if c[0] in args.conditions]
+    else:
+        conditions = list(LADDER)
 
     schemas = discover_schemas(args.schemas)
 
@@ -183,7 +197,7 @@ def main() -> int:
     print(f"\nRun record: {path}  [{args.status}]")
     print("\nDelta-F1 per added stage:")
     for schema in {m.schema for m in metrics}:
-        ladder = [m for m in metrics if m.schema == schema]
+        ladder = [m for m in metrics if m.schema == schema and m.condition in _LADDER_NAMES]
         for delta in ablation_delta(ladder):
             print(f"  {schema:<22} {delta['from']:>18} -> {delta['to']:<20} "
                   f"dF1={delta['delta_f1']:+.4f}  dBurden={delta['delta_review_burden']:+.4f}")
