@@ -81,6 +81,8 @@ def main() -> int:
     args = parser.parse_args()
 
     base = load_config("config/default.yaml")
+    if args.confidence_threshold is None:
+        args.confidence_threshold = base.confidence.bands.review
     if args.conditions:
         known = {name for name, _ in LADDER + SUPPLEMENTARY}
         unknown = set(args.conditions) - known

@@ -120,32 +120,18 @@ def main() -> int:
     print(f"Searching {len(grid)}^3 = {len(grid) ** 3} (fuzzy, semantic, value) "
           f"threshold triples over {len(pairs)} schema(s)...")
 
-    # One context for the whole search: the embedder and CDM index are
-    # threshold-independent, and rebuilding them per triple would reload the
-    # model over a thousand times. Only the three thresholds change.
-    cfg = load_overlay(overlay_path=SEARCH_OVERLAY)
-    context = build_context(cfg, real_model=args.real_model)
-    stages = context.cfg.matching.stages
+    # One context for the whole search: the CDM registry, semantic index and
+    # signature library do not depend on any threshold, and rebuilding them per
+    # triple would reload the model over a thousand times. Only the three
+    # thresholds change; stage enablement is constant across the grid.
+    context = build_context(load_overlay(overlay_path=SEARCH_OVERLAY),
+                            real_model=args.real_model)
 
     best = {"f1": -1.0}
     trace = []
-
-    # The context — CDM registry, semantic index, signature library — does not
-    # depend on any threshold. Rebuilding it inside the loop reloaded
-    # all-MiniLM-L6-v2 from disk and re-encoded all 54 CDM descriptions on
-    # every one of the 121 iterations, which is the same answer computed 121
-    # times. Built once here and the config swapped per iteration instead;
-    # stage enablement is constant across the grid, which is what makes this
-    # safe.
-    context = build_context(
-        load_overlay(fuzzy_threshold=grid[0], semantic_threshold=grid[0],
-                     value_threshold=grid[0]),
-        real_model=args.real_model,
-    )
-
-    for fuzzy, semantic in itertools.product(grid, grid):
-        cfg = load_overlay(fuzzy_threshold=fuzzy, semantic_threshold=semantic,
-                           value_threshold=fuzzy)
+    for fuzzy, semantic, value in itertools.product(grid, grid, grid):
+        cfg = load_overlay(overlay_path=SEARCH_OVERLAY, fuzzy_threshold=fuzzy,
+                           semantic_threshold=semantic, value_threshold=value)
         context = replace(context, cfg=cfg)
         scores = []
         for schema, gold in pairs:
