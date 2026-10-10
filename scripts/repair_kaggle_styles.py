@@ -1,6 +1,6 @@
 """Repair the Kaggle styles.csv so a strict CSV reader can open it.
 
-    python -m scripts.repair_kaggle_styles data/heldout/styles.csv data/heldout/kaggle_styles.csv
+    python -m scripts.repair_kaggle_styles <folder>/styles.csv <folder>/kaggle_styles.csv
 
 The public file has a few rows with an unquoted comma inside the LAST column
 (``productDisplayName``), giving 11 fields where the header declares 10. A strict
