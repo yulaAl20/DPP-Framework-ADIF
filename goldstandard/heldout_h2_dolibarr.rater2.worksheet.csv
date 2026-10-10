@@ -1,0 +1,9 @@
+raw_header,datatype,sample_values,cdm_field,rationale
+note_public,string,"Pre-washed, ships flat packed | Pre-washed, ships flat packed | Pre-washed, ships flat packed",,
+tobatch,integer,1 | 1 | 1,,
+customcode,integer,61091000 | 61091000 | 61091000,,
+height,integer,3 | 3 | 3,,
+price,float,14.90000000 | 14.90000000 | 14.90000000,,
+accountancy_code_sell,integer,707000 | 707000 | 707000,,
+options_composition,string,100% Cotton | 100% Cotton | 100% Cotton,,
+options_size,string,M | L | M,,

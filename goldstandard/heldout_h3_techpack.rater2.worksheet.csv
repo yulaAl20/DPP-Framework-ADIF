@@ -1,0 +1,7 @@
+raw_header,datatype,sample_values,cdm_field,rationale
+Gender,string,Womens | Womens | Womens,,
+Size,string,S | M | M,,
+Factory ID,string,LKA-0412 | LKA-0412 | LKA-0412,,
+FOB Price (USD),float,5.85 | 5.85 | 5.85,,
+Approved By,string,J. Alvarez | J. Alvarez | J. Alvarez,,
+Recycled Fibre (%),integer,40 | 40 | 40,,
