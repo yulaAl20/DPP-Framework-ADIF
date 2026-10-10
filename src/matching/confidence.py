@@ -27,7 +27,12 @@ from pathlib import Path
 from src.config import UnsetTunable
 from src.matching.models import MappingRecord, Stage
 
-__all__ = ["Calibrator", "expected_calibration_error", "reliability_bins"]
+__all__ = [
+    "Calibrator",
+    "derive_review_threshold",
+    "expected_calibration_error",
+    "reliability_bins",
+]
 
 
 @dataclass
@@ -234,3 +239,40 @@ def expected_calibration_error(
         ),
         6,
     )
+
+
+def derive_review_threshold(
+    pairs: list[tuple[float, bool]], target_accuracy: float = 0.90
+) -> dict[str, float | int] | None:
+    """Lowest calibrated confidence at which accuracy reaches the target.
+
+    The review rule (decisions.md): a mapping whose calibrated confidence is
+    below the returned threshold goes to a human; at or above it, the system's
+    own accuracy on the practice data is at least ``target_accuracy``.
+
+    Args:
+        pairs: ``(calibrated confidence, was correct)`` for every mapped record
+            on the scratch schemas.
+        target_accuracy: Accuracy that the auto-accepted set must reach.
+
+    Returns:
+        ``{"threshold", "accuracy", "accepted", "total"}`` for the lowest
+        candidate threshold whose accepted set (confidence >= threshold) meets
+        the target, or ``None`` if no threshold does. ``None`` means the
+        cascade never reaches the target on this data, and the honest outcome
+        is that everything needs review — not a lowered target.
+    """
+    if not pairs:
+        return None
+    total = len(pairs)
+    for candidate in sorted({c for c, _ in pairs}):
+        accepted = [ok for c, ok in pairs if c >= candidate]
+        accuracy = sum(accepted) / len(accepted)
+        if accuracy >= target_accuracy:
+            return {
+                "threshold": candidate,
+                "accuracy": round(accuracy, 6),
+                "accepted": len(accepted),
+                "total": total,
+            }
+    return None

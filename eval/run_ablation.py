@@ -72,7 +72,8 @@ def main() -> int:
     parser.add_argument("--status", choices=["EXPLORATORY", "EVALUATION"],
                         default="EXPLORATORY")
     parser.add_argument("--confidence-threshold", type=float,
-                        help="Acceptance threshold for the review-burden statistic (D16)")
+                        help="Acceptance threshold for the review-burden statistic (D16). "
+                             "Defaults to confidence.bands.review from the config.")
     parser.add_argument("--conditions", nargs="*",
                         help="Subset of condition names; default is the full ladder")
     parser.add_argument("--real-model", action="store_true")

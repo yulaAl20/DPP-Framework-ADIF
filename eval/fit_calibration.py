@@ -22,6 +22,8 @@ import argparse
 from collections import Counter
 from pathlib import Path
 
+import yaml
+
 from eval.runner import (
     build_context,
     discover_schemas,
@@ -30,7 +32,11 @@ from eval.runner import (
     run_schema,
 )
 from src.config import load_config
-from src.matching.confidence import Calibrator, expected_calibration_error
+from src.matching.confidence import (
+    Calibrator,
+    derive_review_threshold,
+    expected_calibration_error,
+)
 from src.matching.models import NO_MAPPING
 
 MIN_OBSERVATIONS_PER_STAGE = 30
@@ -80,6 +86,14 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=Path("config/calibrator.json"))
     parser.add_argument("--fuzzy-threshold", type=float)
     parser.add_argument("--semantic-threshold", type=float)
+    parser.add_argument("--value-threshold", type=float)
+    parser.add_argument(
+        "--review-accuracy", type=float, default=0.90,
+        help="Accuracy the auto-accepted mappings must reach on the scratch "
+             "data; the lowest confidence achieving it becomes the review "
+             "threshold (default 0.90).",
+    )
+    parser.add_argument("--review-out", type=Path, default=Path("config/review_threshold.yaml"))
     parser.add_argument("--real-model", action="store_true")
     parser.add_argument(
         "--allow-stub", action="store_true",
@@ -102,13 +116,13 @@ def main() -> int:
     cfg = load_overlay(
         fuzzy_threshold=args.fuzzy_threshold,
         semantic_threshold=args.semantic_threshold,
-        value_threshold=args.fuzzy_threshold,
+        value_threshold=args.value_threshold,
     )
     if cfg.unset_matching_thresholds():
         raise SystemExit(
             "Thresholds are unset. Run eval/grid_search.py first, write the "
             "derived values into config/default.yaml, or pass them explicitly "
-            "with --fuzzy-threshold / --semantic-threshold (D11)."
+            "with --fuzzy-threshold / --semantic-threshold / --value-threshold (D11)."
         )
 
     schemas = discover_schemas(args.schemas)
@@ -139,7 +153,7 @@ def main() -> int:
             overlay_path=overlay,
             fuzzy_threshold=args.fuzzy_threshold,
             semantic_threshold=args.semantic_threshold,
-            value_threshold=args.fuzzy_threshold,
+            value_threshold=args.value_threshold,
         )
         if cond_cfg.unset_matching_thresholds():
             continue
@@ -189,6 +203,32 @@ def main() -> int:
     print(f"\nFitted per-stage coefficients: {calibrator.coefficients}")
     print(f"Written to {args.out}")
     print(f"\nIn-sample ECE: {in_sample_ece:.4f}")
+    review = derive_review_threshold(pairs, args.review_accuracy)
+    if review is None:
+        print(
+            f"\nREVIEW THRESHOLD: no confidence level reaches "
+            f"{args.review_accuracy:.0%} accuracy on the scratch data, so no "
+            f"threshold was written. Report that finding; do not lower the target "
+            f"to make a number appear."
+        )
+    else:
+        args.review_out.parent.mkdir(parents=True, exist_ok=True)
+        args.review_out.write_text(yaml.safe_dump({
+            "_derived_by": "eval/fit_calibration.py",
+            "_rule": f"lowest calibrated confidence at which accuracy >= "
+                     f"{args.review_accuracy:.0%} on scratch data (in-sample)",
+            "_accuracy_at_threshold": review["accuracy"],
+            "_accepted": f"{review['accepted']}/{review['total']}",
+            "confidence": {"bands": {"review": review["threshold"]}},
+        }, sort_keys=False), encoding="utf-8")
+        print(
+            f"\nREVIEW THRESHOLD: {review['threshold']:.4f} — mappings below this "
+            f"confidence go to a human. At or above it, {review['accepted']} of "
+            f"{review['total']} scratch mappings are auto-accepted at "
+            f"{review['accuracy']:.1%} accuracy (target {args.review_accuracy:.0%}).\n"
+            f"Written to {args.review_out}. Copy it into config/default.yaml as "
+            f"confidence.bands.review. (In-sample, like the ECE above.)"
+        )
     print(
         "That is an IN-SAMPLE figure on the data the model was fitted to — it "
         "is not Metric 3 and must not be reported as such. Metric 3 is computed "

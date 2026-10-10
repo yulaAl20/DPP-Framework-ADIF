@@ -2,8 +2,11 @@
 
     python -m eval.grid_search --schemas data/dev --gold goldstandard --out config/thresholds.yaml
 
-Derives the Stage 2, 3 and 4 acceptance thresholds by exhaustive search,
-optimising macro-F1. This is the step that turns the ``null`` placeholders in
+Derives the Stage 2, 3 and 4 (fuzzy, semantic, value) acceptance thresholds by
+exhaustive search, optimising macro-F1. The search runs with the complete
+cascade (``config/ablation/full_cascade_value.yaml``) so that the value stage
+is actually exercised; the value threshold only matters for columns that every
+header-based stage left unmatched. This is the step that turns the ``null`` placeholders in
 ``config/default.yaml`` into real values.
 
 **It refuses to read the sealed directory.** Tuning on the evaluation set is
@@ -37,6 +40,8 @@ from eval.runner import (
     run_schema,
 )
 from src.config import load_config
+
+SEARCH_OVERLAY = "config/ablation/full_cascade_value.yaml"
 
 
 def _refuse_sealed(path: Path) -> None:
@@ -112,7 +117,15 @@ def main() -> int:
         pairs.append((schema, load_gold_standard(gold_path)))
 
     grid = [round(v, 2) for v in _frange(args.start, args.stop, args.step)]
-    print(f"Searching {len(grid)}x{len(grid)} threshold pairs over {len(pairs)} schema(s)...")
+    print(f"Searching {len(grid)}^3 = {len(grid) ** 3} (fuzzy, semantic, value) "
+          f"threshold triples over {len(pairs)} schema(s)...")
+
+    # One context for the whole search: the embedder and CDM index are
+    # threshold-independent, and rebuilding them per triple would reload the
+    # model over a thousand times. Only the three thresholds change.
+    cfg = load_overlay(overlay_path=SEARCH_OVERLAY)
+    context = build_context(cfg, real_model=args.real_model)
+    stages = context.cfg.matching.stages
 
     best = {"f1": -1.0}
     trace = []
@@ -139,12 +152,17 @@ def main() -> int:
             result, _ = run_schema(schema, context)
             scores.append(mapping_f1(result, gold.mappings)[2])
         macro_f1 = round(sum(scores) / len(scores), 6)
-        trace.append({"fuzzy": fuzzy, "semantic": semantic, "macro_f1": macro_f1})
-        if macro_f1 > best["f1"]:
-            best = {"f1": macro_f1, "fuzzy": fuzzy, "semantic": semantic}
+        trace.append({"fuzzy": fuzzy, "semantic": semantic, "value": value,
+                      "macro_f1": macro_f1})
+        # Ties go to the higher (stricter) thresholds: the grid is ascending,
+        # so >= keeps the last equal-scoring triple. Fewer low-evidence
+        # acceptances at no cost in F1 is the safer reading of a tie.
+        if macro_f1 >= best["f1"]:
+            best = {"f1": macro_f1, "fuzzy": fuzzy, "semantic": semantic,
+                    "value": value}
 
-    print(f"\nBest macro-F1 {best['f1']:.4f} at "
-          f"fuzzy={best['fuzzy']}, semantic={best['semantic']}")
+    print(f"\nBest macro-F1 {best['f1']:.4f} at fuzzy={best['fuzzy']}, "
+          f"semantic={best['semantic']}, value={best['value']}")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(yaml.safe_dump({
@@ -155,6 +173,7 @@ def main() -> int:
         "matching": {"stages": {
             "fuzzy": {"threshold": best["fuzzy"]},
             "semantic": {"threshold": best["semantic"]},
+            "value": {"threshold": best["value"]},
         }},
     }, sort_keys=False), encoding="utf-8")
 
@@ -162,7 +181,7 @@ def main() -> int:
         json.dumps(trace, indent=2), encoding="utf-8")
 
     print(f"\nWritten to {args.out} and {args.out.parent / 'grid_trace.json'}.")
-    print("Copy these values into config/default.yaml, then record them in "
+    print("Copy the three thresholds into config/default.yaml, then record them in "
           "methodology.md's Results section with today's date (D11).")
     return 0
 

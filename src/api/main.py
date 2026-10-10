@@ -277,6 +277,12 @@ async def upload(file: UploadFile, manufacturer_id: str = "unknown") -> dict[str
 
     if (calibrator := get_calibrator()) is not None:
         calibrator.apply(result.records)
+        # Review rule: below the derived confidence, a human decides.
+        review_below = cfg.confidence.bands.review
+        if review_below is not None:
+            for record in result.records:
+                if record.confidence is not None and record.confidence < review_below:
+                    record.review_required = True
 
     SESSIONS[upload_id] = Session(
         upload_id=upload_id,
