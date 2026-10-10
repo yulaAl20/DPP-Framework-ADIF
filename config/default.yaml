@@ -58,7 +58,7 @@ matching:
       enabled: true
     fuzzy:                      # M4
       enabled: true
-      threshold: null           # UNSET — grid search (D11)
+      threshold: 85.0          
       top_k: 5                  # FR-4.3
       scorers: ["ratio", "token_sort_ratio", "partial_ratio"]   # FR-4.2
       combine: max              # open decision §13 — max vs weighted mean
@@ -71,13 +71,13 @@ matching:
       partial_min_length_ratio: 0.5
     semantic:                   # M5
       enabled: true
-      threshold: null           # UNSET - grid search (D11)
+      threshold: 85.0           
       top_k: 5
       model: "sentence-transformers/all-MiniLM-L6-v2"
       model_revision: "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
     value:                      # M6 - Stage 4, invoked only when every
       enabled: false            # header-based stage returned nothing (FR-6.3).
-      threshold: null           # UNSET - grid search (D11)
+      threshold: 75.0          
       top_k: 5
       signatures: cdm/vocabularies/signatures.yaml
 confidence:                     # M7
