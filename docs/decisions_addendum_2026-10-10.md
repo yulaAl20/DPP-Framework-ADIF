@@ -58,4 +58,4 @@ can record.
 - **NFR-3 (hardware), 2026-10-10:** Intel Core i5-1135G7 @ 2.40 GHz, 4 cores / 8 threads; 11.8 GB RAM as reported by Windows; Intel Iris Xe integrated graphics only; `torch.cuda.is_available()` = `False` (CPU-only run).
 - **NFR-1 (offline):** demo run with Wi-Fi off completed on the real model from the local cache. **[FILL IN date and screenshot reference]**
 - **NFR-9 (second machine):** **[FILL IN after the install: machine, OS, Python version, date, deviations from `docs/setup.md`, time taken, outcome]**
-- Per-schema cascade time on this machine was 0.02 to 0.4 s for the five schemas; the 44,446-row Kaggle file took 0.08 s for the full cascade (stage time only, excluding file loading).
+- Per-schema cascade time on this machine was 0.01 to 0.4 s for the five schemas; the 44,446-row Kaggle file took 0.08 s for the full cascade (stage time only, excluding file loading).
