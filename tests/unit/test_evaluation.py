@@ -18,6 +18,8 @@ from src.matching.models import MappingRecord, Stage
 from src.matching.stage3_semantic import SemanticIndex, StubEmbedder
 from src.matching.stage4_value import SignatureLibrary
 
+from tests.helpers import underived  # noqa: E402
+
 BASE = load_config("config/default.yaml")
 REG = CdmRegistry.load(
     "tests/fixtures/cdm_test.schema.json",
@@ -64,7 +66,7 @@ def test_value_stage_enabled_without_a_library_is_an_error():
 
 
 def test_value_threshold_must_be_derived_like_the_others():
-    cfg = BASE.model_copy(deep=True)
+    cfg = underived(BASE)
     cfg.matching.stages.value.enabled = True
     cfg.matching.stages.fuzzy.threshold = 85.0
     cfg.matching.stages.semantic.enabled = False

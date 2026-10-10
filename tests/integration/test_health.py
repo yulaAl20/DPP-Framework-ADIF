@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from src.api.main import app
 from src.config import load_config
+from tests.helpers import underived
 
 client = TestClient(app)
 
@@ -45,8 +46,17 @@ def test_openapi_docs_are_generated() -> None:
     assert client.get("/openapi.json").status_code == 200
 
 
-def test_upload_without_thresholds_returns_409_not_a_guess() -> None:
+def _serve_underived(monkeypatch):
+    """Point the API at a pre-derivation config (thresholds null)."""
+    import src.api.main as api
+
+    api.get_config.cache_clear()
+    monkeypatch.setattr(api, "get_config", lambda: underived(load_config("config/default.yaml")))
+
+
+def test_upload_without_thresholds_returns_409_not_a_guess(monkeypatch) -> None:
     """D11 enforced at the HTTP boundary."""
+    _serve_underived(monkeypatch)
     r = client.post("/upload", files={"file": ("a.csv", io.BytesIO(CSV), "text/csv")})
     assert r.status_code == 409
     assert "D11" in r.json()["detail"]
@@ -102,9 +112,10 @@ def test_template_listing() -> None:
     assert body["latest_version"] is None
 
 
-def test_upload_refusal_explains_how_to_run_an_exploratory_session() -> None:
+def test_upload_refusal_explains_how_to_run_an_exploratory_session(monkeypatch) -> None:
     """The 409 must be actionable. Before the grid search the UI is otherwise
     undemonstrable, which is when you most need to see it work."""
+    _serve_underived(monkeypatch)
     r = client.post("/upload", files={"file": ("a.csv", io.BytesIO(CSV), "text/csv")})
     assert r.status_code == 409
     assert "ADIF_EXPLORATORY_THRESHOLDS" in r.json()["detail"]
@@ -115,6 +126,7 @@ def test_exploratory_session_runs_and_labels_itself(monkeypatch) -> None:
     always marks the session exploratory (decisions.md D11)."""
     import src.api.main as api
 
+    on_disk = load_config("config/default.yaml").matching.stages.fuzzy.threshold
     monkeypatch.setenv(api.EXPLORATORY_ENV, "fuzzy=85,semantic=70")
     api.get_config.cache_clear()
     api.get_registry.cache_clear()
@@ -131,7 +143,7 @@ def test_exploratory_session_runs_and_labels_itself(monkeypatch) -> None:
         )
         assert up.status_code == 200
         # config on disk is untouched
-        assert load_config("config/default.yaml").matching.stages.fuzzy.threshold is None
+        assert load_config("config/default.yaml").matching.stages.fuzzy.threshold == on_disk
     finally:
         monkeypatch.delenv(api.EXPLORATORY_ENV, raising=False)
         api.get_config.cache_clear()

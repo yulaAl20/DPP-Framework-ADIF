@@ -11,6 +11,7 @@ import yaml
 from pydantic import ValidationError
 
 from src.config import UnsetTunable, load_config, require
+from tests.helpers import underived
 
 CONFIG = "config/default.yaml"
 
@@ -22,29 +23,27 @@ def test_config_loads_and_records_its_own_hash() -> None:
     assert len(cfg.source_sha256) == 64
 
 
-def test_thresholds_are_unset_before_grid_search() -> None:
-    """D11: no threshold may carry an invented default before it is derived.
+def test_derived_thresholds_are_present_and_in_range() -> None:
+    """D11, post-derivation: the grid search has run, so none may be null, and
+    every one must be a plausible 0-100 score rather than a stray placeholder.
 
-    The calibration *method* is excluded deliberately. D6 decided it (Platt),
-    so it is a logged decision rather than an underived number. The bands, which
-    do have to be derived, remain unset.
+    The calibration *method* is excluded from derivation: D6 decided it (Platt).
     """
     cfg = load_config(CONFIG)
-    assert cfg.matching.stages.fuzzy.threshold is None
-    assert cfg.matching.stages.semantic.threshold is None
-    assert cfg.matching.stages.value.threshold is None
-    assert cfg.confidence.bands.auto_accept is None
+    for stage in ("fuzzy", "semantic", "value"):
+        threshold = getattr(cfg.matching.stages, stage).threshold
+        assert threshold is not None and 0 < threshold <= 100, stage
     assert cfg.confidence.calibration == "platt"
 
 
 def test_reading_an_unset_tunable_raises_rather_than_defaulting() -> None:
-    cfg = load_config(CONFIG)
+    cfg = underived(load_config(CONFIG))
     with pytest.raises(UnsetTunable, match="D11"):
         require(cfg.matching.stages.fuzzy.threshold, "matching.stages.fuzzy.threshold")
 
 
 def test_unset_tunables_are_enumerated() -> None:
-    pending = load_config(CONFIG).unset_tunables()
+    pending = underived(load_config(CONFIG)).unset_tunables()
     assert "matching.stages.fuzzy.threshold" in pending
     assert "confidence.bands.auto_accept" in pending
 

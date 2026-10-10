@@ -15,6 +15,8 @@ from src.matching.stage3_semantic import SemanticIndex, StubEmbedder
 
 SCHEMA = "tests/fixtures/cdm_test.schema.json"
 ALIASES = "tests/fixtures/aliases_test.yaml"
+from tests.helpers import underived  # noqa: E402
+
 BASE = load_config("config/default.yaml")
 REG = CdmRegistry.load(SCHEMA, ALIASES, BASE.normalisation)
 
@@ -122,7 +124,7 @@ def test_disabling_a_stage_changes_which_stage_decides():
 def test_cascade_refuses_to_run_on_underived_thresholds():
     """D11 enforced at the point it matters, not just at config load."""
     with pytest.raises(UnsetTunable, match="D11"):
-        run_cascade(analyse("colour"), REG, BASE, index())
+        run_cascade(analyse("colour"), REG, underived(BASE), index())
 
 
 def test_semantic_stage_requires_an_index():
