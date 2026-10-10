@@ -34,16 +34,19 @@ from src.cdm.registry import CdmRegistry
 from src.config import AdifConfig, load_config
 from src.ingestion.errors import IngestionError
 from src.ingestion.loader import load_tabular
+from eval.runner import build_context, load_overlay
 from src.matching.arbitration import run_cascade
-from src.matching.stage3_semantic import MiniLMEmbedder, SemanticIndex, StubEmbedder
-from src.matching.stage4_value import SignatureLibrary
+from src.matching.confidence import Calibrator
 
-FIXTURE_SCHEMA = "tests/fixtures/cdm_test.schema.json"
-FIXTURE_ALIASES = "tests/fixtures/aliases_test.yaml"
+#: The complete gateway, value stage included, as the final system runs.
+DEMO_OVERLAY = "config/ablation/full_cascade_value.yaml"
+CALIBRATOR_PATH = Path("config/calibrator.json")
 
-# DEMONSTRATION VALUES ONLY. Never copy these into config/default.yaml.
+# FALLBACK VALUES ONLY, used when config/default.yaml still holds null
+# thresholds. Never copy these into config/default.yaml.
 DEMO_FUZZY_THRESHOLD = 85.0
 DEMO_SEMANTIC_THRESHOLD = 99.0
+DEMO_VALUE_THRESHOLD = 80.0
 
 SAMPLE = pd.DataFrame(
     {
@@ -76,13 +79,22 @@ def reject_if_sealed(path: Path, cfg: AdifConfig) -> None:
         )
 
 
-def build_config(use_real_model: bool) -> AdifConfig:
-    cfg = load_config("config/default.yaml")
-    cfg.matching.stages.fuzzy.threshold = DEMO_FUZZY_THRESHOLD
-    cfg.matching.stages.semantic.threshold = DEMO_SEMANTIC_THRESHOLD
-    if not use_real_model:
-        cfg.matching.stages.semantic.enabled = True
-    return cfg
+def build_config() -> tuple[AdifConfig, bool]:
+    """Load the config with the value stage on; fall back only if thresholds are null.
+
+    Returns:
+        The config, and whether any threshold had to be invented to run at all.
+    """
+    cfg = load_overlay(overlay_path=DEMO_OVERLAY)
+    invented = bool(cfg.unset_matching_thresholds())
+    stages = cfg.matching.stages
+    if stages.fuzzy.threshold is None:
+        stages.fuzzy.threshold = DEMO_FUZZY_THRESHOLD
+    if stages.semantic.threshold is None:
+        stages.semantic.threshold = DEMO_SEMANTIC_THRESHOLD
+    if stages.value.threshold is None:
+        stages.value.threshold = DEMO_VALUE_THRESHOLD
+    return cfg, invented
 
 
 def main() -> int:
@@ -95,7 +107,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    cfg = build_config(args.real_model)
+    cfg, invented = build_config()
 
     if args.file:
         reject_if_sealed(args.file, cfg)
@@ -110,36 +122,41 @@ def main() -> int:
         frame, origin = SAMPLE, "built-in sample"
         detail = "in-memory DataFrame"
 
-    if args.real_model:
-        embedder = MiniLMEmbedder(
-            cfg.matching.stages.semantic.model,
-            str(cfg.paths.embedding_cache),
-            cfg.matching.stages.semantic.model_revision,
-        )
-    else:
-        embedder = StubEmbedder()
-
-    registry = CdmRegistry.load(FIXTURE_SCHEMA, FIXTURE_ALIASES, cfg.normalisation)
+    context = build_context(cfg, real_model=args.real_model)
+    registry = context.registry
     analysis = analyse_frame(frame, cfg)
-    signatures = (
-        SignatureLibrary.load(cfg.matching.stages.value.signatures)
-        if cfg.matching.stages.value.enabled
-        else None
-    )
     result = run_cascade(
-        analysis, registry, cfg, SemanticIndex(registry, embedder), signatures
+        analysis, registry, cfg, context.semantic_index, context.signature_library
     )
 
+    calibrated = CALIBRATOR_PATH.is_file()
+    if calibrated:
+        Calibrator.load(CALIBRATOR_PATH).apply(result.records, strict=False)
+        review_below = cfg.confidence.bands.review
+        if review_below is not None:
+            for record in result.records:
+                if record.confidence is not None and record.confidence < review_below:
+                    record.review_required = True
+
+    stages = cfg.matching.stages
+    cdm_label = (
+        f"{len(registry.fields)} invented fields, TEST FIXTURE"
+        if context.using_fixture_cdm else f"{len(registry.fields)} fields"
+    )
     print("=" * 86)
     print("ADIF pipeline demonstration — NOT AN EVALUATION")
-    print(f"  CDM        : {FIXTURE_SCHEMA}  (test fixture, {len(registry.fields)} invented fields)")
-    print(f"  Thresholds : fuzzy={DEMO_FUZZY_THRESHOLD} semantic={DEMO_SEMANTIC_THRESHOLD}  (invented, not grid-searched)")
-    print(f"  Embedder   : {embedder.name}")
+    print(f"  CDM        : {'tests/fixtures/cdm_test.schema.json' if context.using_fixture_cdm else cfg.paths.cdm_schema}  ({cdm_label})")
+    print(f"  Thresholds : fuzzy={stages.fuzzy.threshold} semantic={stages.semantic.threshold} "
+          f"value={stages.value.threshold}  "
+          f"({'INVENTED fallback, not grid-searched' if invented else 'from config/default.yaml'})")
+    print(f"  Confidence : {'calibrated (config/calibrator.json)' if calibrated else 'none - no calibrator fitted'}"
+          f"; review below {cfg.confidence.bands.review}")
+    print(f"  Embedder   : {context.embedder_name}")
     print(f"  Input      : {origin}  ({detail})")
     print(f"  Rows/cols  : {analysis.row_count} x {analysis.column_count}")
     print("=" * 86)
 
-    print(f"\n{'source column':<24}{'CDM field':<22}{'stage':<10}{'score':>8}  note")
+    print(f"\n{'source column':<24}{'CDM field':<22}{'stage':<10}{'score':>8}{'conf':>8}  note")
     print("-" * 86)
     for record in result.records:
         note = (
@@ -147,9 +164,10 @@ def main() -> int:
             if record.conflict_flagged
             else ("needs review" if record.review_required else "")
         )
+        conf = f"{record.confidence:.3f}" if record.confidence is not None else "-"
         print(
             f"{record.raw_header[:23]:<24}{record.target_field:<22}"
-            f"{record.deciding_stage.value:<10}{record.raw_score:>8.1f}  {note}"
+            f"{record.deciding_stage.value:<10}{record.raw_score:>8.1f}{conf:>8}  {note}"
         )
 
     print(f"\nstage hits          : {result.stage_hits}")
@@ -161,11 +179,18 @@ def main() -> int:
         if record.conflict_flagged and record.notes:
             print(f"\nconflict detail     : {record.raw_header} — {record.notes}")
 
+    provisional = []
+    if context.using_fixture_cdm:
+        provisional.append("the CDM is a test fixture, not the canonical model")
+    if invented:
+        provisional.append("thresholds are invented, not grid-searched")
+    if not args.real_model:
+        provisional.append("the embedder is a stub - pass --real-model")
+    if not calibrated:
+        provisional.append("no confidence is reported until a calibrator is fitted")
+    if provisional:
+        print("\nStill provisional:\n  - " + "\n  - ".join(provisional))
     print(
-        "\nAll fourteen modules are implemented. What is still provisional:\n"
-        "  - the CDM is a test fixture, not the canonical model\n"
-        "  - the embedder is a stub until all-MiniLM-L6-v2 is cached\n"
-        "  - no confidence is reported until a calibrator is fitted\n"
         "\nFor validation, ADID identifiers, JSON-LD output and the review UI, "
         "run the API:\n  uvicorn src.api.main:app --reload   "
         "then open http://127.0.0.1:8000/review"
