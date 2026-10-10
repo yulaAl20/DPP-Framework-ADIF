@@ -55,7 +55,8 @@ INCREMENTS: list[tuple[str, list[str]]] = [
     ("B9: manufacturer template store with drift reporting (M9)",
      ["src/templates/"]),
     ("B10: instrumentation and evaluation harness (M14)",
-     ["src/instrumentation/", "eval/", "config/ablation/", "runs/.gitkeep"]),
+     ["src/instrumentation/", "eval/", "config/ablation/", "runs/.gitkeep",
+      "tests/unit/test_template_reuse.py"]),
     ("B11: value-based matching stage, wired into the cascade (M6)",
      ["src/matching/stage4_value.py", "tests/unit/test_evaluation.py",
       "tests/unit/test_full_pipeline.py"]),
@@ -77,7 +78,7 @@ INCREMENTS: list[tuple[str, list[str]]] = [
     ("Add acceptance tests for NFR-1 offline, NFR-4 performance, NFR-5 reproducibility",
      ["tests/acceptance/"]),
     ("Add documentation: setup, verification guide, NFR record, licence inventory",
-     ["README.md", "NEXT_STEPS.md", "QUICKSTART.md", "RECOVER.md", "PUSH.md", "docs/"]),
+     ["README.md", "NEXT_STEPS.md", "QUICKSTART.md", "RECOVER.md", "PUSH.md", "RUNBOOK.md", "docs/"]),
 ]
 
 
