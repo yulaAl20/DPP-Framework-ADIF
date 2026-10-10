@@ -84,7 +84,7 @@ confidence:                     # M7
   calibration: platt            # D6. Isotonic needs more data than this study has.
   bands:                        # FR-8.4 visual bands / FR-7.4 rejection
     auto_accept: null           # UNSET
-    review: null                # UNSET
+    review: 0.9608                
     reject: null                # UNSET
 
 determinism:                    # NFR-5
