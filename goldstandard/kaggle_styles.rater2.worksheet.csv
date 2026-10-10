@@ -1,0 +1,4 @@
+raw_header,datatype,sample_values,cdm_field,rationale
+gender,string,Men | Men | Women,,
+baseColour,string,Navy Blue | Blue | Silver,,
+productDisplayName,string,Turtle Check Men Navy Blue Shirt | Peter England Men Party Blue Jeans | Titan Women Silver Watch,,
