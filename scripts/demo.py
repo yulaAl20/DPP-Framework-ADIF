@@ -156,8 +156,8 @@ def main() -> int:
     print(f"  Rows/cols  : {analysis.row_count} x {analysis.column_count}")
     print("=" * 86)
 
-    print(f"\n{'source column':<24}{'CDM field':<22}{'stage':<10}{'score':>8}{'conf':>8}  note")
-    print("-" * 86)
+    print(f"\n{'source column':<24}{'CDM field':<26}{'stage':<10}{'score':>8}{'conf':>8}  note")
+    print("-" * 90)
     for record in result.records:
         note = (
             "CONFLICT — demoted"
@@ -166,7 +166,7 @@ def main() -> int:
         )
         conf = f"{record.confidence:.3f}" if record.confidence is not None else "-"
         print(
-            f"{record.raw_header[:23]:<24}{record.target_field:<22}"
+            f"{record.raw_header[:23]:<24}{record.target_field:<26}"
             f"{record.deciding_stage.value:<10}{record.raw_score:>8.1f}{conf:>8}  {note}"
         )
 
